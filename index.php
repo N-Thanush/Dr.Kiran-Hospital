@@ -7,7 +7,6 @@
 
     <link rel="icon" href="img/klogo-.png" type="image/x-icon">
 
-
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -16,184 +15,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-
-    <style>
-        :root {
-            --bs-primary: #1e3c72;
-            --bs-secondary: #88bbcc;
-        }
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            padding-top: 0;
-            margin: 0;
-            overflow-x: hidden;
-        }
-
-        /* Enhanced Navbar Styles */
-        .navbar {
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.98) !important;
-            padding: 0.75rem 0;
-            transition: all 0.3s ease;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1030;
-            margin: 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        .navbar.scrolled {
-            padding: 0.5rem 0;
-            background: rgba(255, 255, 255, 0.98) !important;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-
-        .navbar-brand img {
-            height: 55px;
-            transition: all 0.3s ease;
-        }
-
-        .nav-link {
-            color: var(--bs-primary) !important;
-            font-weight: 500;
-            padding: 1rem !important;
-            position: relative;
-            transition: all 0.3s ease;
-        }
-
-        .nav-link:hover {
-            color: var(--bs-secondary) !important;
-        }
-
-        .nav-link::after {
-            content: '';
-            position: absolute;
-            bottom: 0.7rem;
-            left: 1rem;
-            right: 1rem;
-            height: 2px;
-            background: var(--bs-secondary);
-            transform: scaleX(0);
-            transition: transform 0.3s ease;
-        }
-
-        .nav-link:hover::after {
-            transform: scaleX(1);
-        }
-
-        .top-contact {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-        }
-
-        .top-contact-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .top-contact-item i {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-
-        .top-social {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .top-social a {
-            color: white;
-            opacity: 0.9;
-            transition: all 0.3s ease;
-        }
-
-        .top-social a:hover {
-            opacity: 1;
-            transform: translateY(-2px);
-        }
-
-        .emergency-btn {
-            background: linear-gradient(135deg, var(--bs-primary), var(--bs-secondary));
-            color: white;
-            border: none;
-            padding: 0.5rem 1.5rem;
-            border-radius: 50px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-
-        .emergency-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            color: white;
-        }
-
-        /* Hero Section */
-        .hero {
-            background: linear-gradient(135deg, var(--bs-primary), var(--bs-secondary));
-            min-height: 100vh;
-            position: relative;
-            overflow: hidden;
-            padding-top: 90px;
-        }
-
-        .service-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .service-card:hover {
-            transform: translateY(-10px);
-        }
-
-        .service-icon {
-            width: 70px;
-            height: 70px;
-            background: linear-gradient(135deg, var(--bs-primary), var(--bs-secondary));
-        }
-
-        .stats-section {
-            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('img/backgrnd.jpg');
-            background-size: cover;
-            background-position: center;
-        }
-
-        .stat-circle {
-            width: 120px;
-            height: 120px;
-            background: var(--bs-secondary);
-        }
-
-        .gradient-bg {
-            background: linear-gradient(135deg, var(--bs-primary), var(--bs-secondary));
-        }
-
-        footer {
-            background: linear-gradient(135deg, var(--bs-primary), var(--bs-secondary));
-        }
-
-        @media (max-width: 991.98px) {
-            .navbar {
-                padding: 0.5rem 0;
-            }
-
-            .hero {
-                padding-top: 76px;
-            }
-
-            .nav-link {
-                padding: 0.5rem 1rem !important;
-            }
-
-            .nav-link::after {
-                bottom: 0.3rem;
-            }
-        }
-    </style>
+    <!-- Custom CSS -->
+    <link href="css/custom.css" rel="stylesheet">
+    <link href="css/theme.css" rel="stylesheet">
+    <link href="css/index.css" rel="stylesheet">
 </head>
 <body>
    
@@ -541,6 +366,11 @@ Mon - Sat: 9:00 AM - 1:00 PM
             <p class="text-center mb-0 opacity-75">&copy; 2024 Dr. Kiran Neuro Centre. All rights reserved.</p>
         </div>
     </footer>
+
+    <!-- Navigation Button -->
+    <a href="model.php" class="nav-button animate__animated animate__fadeIn">
+        <i class="fas fa-sitemap"></i>
+    </a>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
