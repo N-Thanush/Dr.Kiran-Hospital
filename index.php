@@ -62,8 +62,10 @@
     <section class="hero d-flex align-items-center" id="home">
         <div class="container">
             <div class="row align-items-center">
-                <div class="col-lg-8 mx-auto text-center text-white">
-                    
+                <div class="col-lg-8 mx-auto text-center text-white position-relative">
+                    <div class="logo-background">
+                        <img src="img/klogo-.png" alt="Dr. Kiran" class="logo-bg">
+                    </div>
                     <h1 class="display-3 fw-bold mb-4 animate__animated animate__fadeInUp">
                        Welcome To <br> Dr. Kiran Neuro Centre
                     </h1>
