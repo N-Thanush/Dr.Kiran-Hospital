@@ -1,17 +1,9 @@
 <?php
 session_start();
-
-
 if (!isset($_SESSION['pharmacy_user_id'])) {
     header("Location: pharmacy_login.php");
     exit();
 }
-
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Cache-Control: post-check=0, pre-check=0", false);
-header("Pragma: no-cache");
-header("Expires: 0");
-
 require_once 'connect.php';
 ?>
 
@@ -27,7 +19,7 @@ require_once 'connect.php';
     <link href="css/index.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-<nav class="navbar navbar-expand-lg">
+    <nav class="navbar navbar-expand-lg">
         <div class="container">
             <a class="navbar-brand" href="#">
                 <img src="img/klogo-.png" alt="Dr. Kiran" class="d-inline-block align-top">
@@ -35,33 +27,14 @@ require_once 'connect.php';
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div id="userbox" class="userbox d-flex align-items-center ms-auto">
-                <a href="#" data-bs-toggle="dropdown" class="d-flex align-items-center text-decoration-none">
-                    
-                    <div class="profile-info text-end">
-                        <?php
-                            if (isset($_SESSION['pharmacy_username'])) {
-                                echo '<span class="name d-block fw-bold ">' . strtoupper(htmlspecialchars($_SESSION['pharmacy_username'])) . '</span>';
-                            } else {
-                                echo '<span class="name d-block fw-bold">Guest</span>';
-                            }
-                        ?>
-                        <span class="role text-muted small fw-bold d-block ">PHARMACIST</span>
-                    </div>
-                    <i class="fa custom-caret ms-2"></i>
-                </a>
-
-                <div class="dropdown-menu dropdown-menu-end">
-                    <ul class="list-unstyled mb-2">
-                        <li class="divider"></li>
-                        <li>
-                            <a role="menuitem" tabindex="-1" href="pharmacy_login.php" class="dropdown-item"></a>
-                  </a>              <i class="bx bx-power-off me-2"></i> Logout
-                            </a>
-                        </li>
-                    </ul>
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <div class="d-flex align-items-center gap-2">
+                    <form method="post" action="pharmacy_login.php" onsubmit="return true;">
+                        <button type="submit" class="btn emergency-btn">
+                            Log Out
+                        </button>
+                    </form>
                 </div>
-           </div>
         </div>
     </nav>
 
@@ -120,12 +93,6 @@ require_once 'connect.php';
                 <div class="modal-body">
                     <form id="stockEntryForm">
                         <div class="row">
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label class="form-label">Quantity</label>
-                                    <input type="number" class="form-control" name="quantity" required>
-                                </div>
-                            </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label class="form-label">Product Name</label>
@@ -148,6 +115,12 @@ require_once 'connect.php';
                                 <div class="mb-3">
                                     <label class="form-label">Batch No</label>
                                     <input type="text" class="form-control" name="batch_no" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Quantity</label>
+                                    <input type="number" class="form-control" name="quantity" required>
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -244,13 +217,6 @@ require_once 'connect.php';
         document.addEventListener('DOMContentLoaded', function() {
             viewAllStock();
         });
-        
-        window.addEventListener("pageshow", function (event) {
-        if (event.persisted || window.performance.navigation.type === 2) {
-        window.location.reload(); 
-        }
-        });
-
     </script>
 </body>
 </html> 

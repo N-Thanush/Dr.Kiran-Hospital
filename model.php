@@ -153,6 +153,11 @@
                     <i class="fas fa-check-circle"></i> Confirmation Page
                 </a>
             </li>
+            <li class="page-item">
+                <a href="test.php" class="page-link">
+                    <i class="fas fa-check-circle"></i> test
+                </a>
+            </li>
         </ul>
 
         <div class="back-to-home">
