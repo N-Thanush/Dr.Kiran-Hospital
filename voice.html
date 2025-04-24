@@ -27,13 +27,15 @@
         </div>
 
         <div class="voice-text-container">
-            <i class="fas fa-edit edit-icon" onclick="editText()"></i>
-            <p id="voiceText">Your message will appear here...</p>
+            <p id="voiceText" contenteditable="true" onfocus="enableEditing()" onblur="disableEditing()">
+                Your message will appear here...
+            </p>
         </div>
+        
 
-        <div class="whatsapp-input">
-            <input type="text" id="phoneNumber" placeholder="Enter WhatsApp number (with country code)">
-            <button class="btn btn-primary" onclick="sendWhatsApp()">
+        <div class="whatsapp-input align-items-center">
+            <input type="text" id="phoneNumber" placeholder="Enter WhatsApp number">
+            <button class="btn btn-primary " onclick="sendWhatsApp()">
                 <i class="fab fa-whatsapp"></i> Send on WhatsApp
             </button>
         </div>

@@ -158,6 +158,11 @@
                     <i class="fas fa-check-circle"></i> test
                 </a>
             </li>
+            <li class="page-item">
+                <a href="pharmacy_dashboard_new.php" class="page-link">
+                    <i class="fas fa-check-circle"></i> new Dashboard
+                </a>
+            </li>
         </ul>
 
         <div class="back-to-home">

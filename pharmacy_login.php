@@ -6,16 +6,24 @@ ini_set('display_errors', 1);
 // Start session
 session_start();
 
+// Clear any existing session data
+session_unset();
+session_destroy();
+session_start();
+
 // Prevent caching
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Cache-Control: post-check=0, pre-check=0", false);
 header("Pragma: no-cache");
 header("Expires: 0");
 
-// Redirect if already logged in
-if (isset($_SESSION['pharmacy_user_id'])) {
-    header("Location: pharmacy_dashboard.php");
-    exit();
+// Check if user is already logged in
+if (isset($_SESSION['pharmacy_user_id']) && !empty($_SESSION['pharmacy_user_id'])) {
+    // Only redirect if we're not on the login page
+    if (basename($_SERVER['PHP_SELF']) !== 'pharmacy_login.php') {
+        header("Location: pharmacy_dashboard.php");
+        exit();
+    }
 }
 
 // Login handling
@@ -28,23 +36,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (empty($username) || empty($password)) {
         $error = "Please enter both username and password";
     } else {
-        $stmt = $conn->prepare("SELECT id, username, password FROM pharmacy_users WHERE username = ?");
-        $stmt->bind_param("s", $username);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        if ($result->num_rows === 1) {
-            $user = $result->fetch_assoc();
-            if (password_verify($password, $user['password'])) {
-                $_SESSION['pharmacy_user_id'] = $user['id'];
-                $_SESSION['pharmacy_username'] = $user['username'];
-                header("Location: pharmacy_dashboard.php");
-                exit();
+        try {
+            $stmt = $conn->prepare("SELECT id, username, password FROM pharmacy_users WHERE username = ?");
+            if (!$stmt) {
+                throw new Exception("Prepare failed: " . $conn->error);
+            }
+            
+            $stmt->bind_param("s", $username);
+            if (!$stmt->execute()) {
+                throw new Exception("Execute failed: " . $stmt->error);
+            }
+            
+            $result = $stmt->get_result();
+            if ($result->num_rows === 1) {
+                $user = $result->fetch_assoc();
+                if (password_verify($password, $user['password'])) {
+                    // Start a new session
+                    session_regenerate_id(true);
+                    $_SESSION['pharmacy_user_id'] = $user['id'];
+                    $_SESSION['pharmacy_username'] = $user['username'];
+                    header("Location: pharmacy_dashboard.php");
+                    exit();
+                } else {
+                    $error = "Invalid username or password";
+                }
             } else {
                 $error = "Invalid username or password";
             }
-        } else {
-            $error = "Invalid username or password";
+        } catch (Exception $e) {
+            error_log("Login error: " . $e->getMessage());
+            $error = "An error occurred during login. Please try again.";
         }
     }
 }
