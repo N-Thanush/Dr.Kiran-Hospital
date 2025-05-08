@@ -1,0 +1,152 @@
+/* Delete Button Animations */
+.delete-slot {
+    position: relative;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 50%;
+    background-color: #ff4444;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    opacity: 0.9;
+    margin-left: 8px;
+}
+
+.delete-slot:hover {
+    background-color: #ff0000;
+    transform: scale(1.1);
+    opacity: 1;
+    box-shadow: 0 4px 8px rgba(255, 0, 0, 0.2);
+}
+
+.delete-slot:active {
+    transform: scale(0.95);
+}
+
+.delete-slot i {
+    transition: transform 0.3s ease;
+}
+
+.delete-slot:hover i {
+    transform: rotate(90deg);
+}
+
+/* Delete Animation */
+.delete-animation {
+    animation: deleteEffect 0.5s ease forwards;
+}
+
+@keyframes deleteEffect {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    20% {
+        transform: scale(1.2);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(0);
+        opacity: 0;
+    }
+}
+
+/* Time Slot Container Animation */
+.time-slot {
+    transition: all 0.3s ease;
+}
+
+.time-slot.deleting {
+    animation: slotFadeOut 0.5s ease forwards;
+}
+
+@keyframes slotFadeOut {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0.8);
+        opacity: 0;
+        height: 0;
+        margin: 0;
+        padding: 0;
+    }
+}
+
+/* Confirmation Overlay */
+.delete-confirm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 68, 68, 0.1);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.delete-confirm-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Success Animation */
+.delete-success {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 50px;
+    height: 50px;
+    background-color: #4CAF50;
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.delete-success.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+.delete-success:after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 24px;
+}
+
+/* Error Animation */
+.delete-error {
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+    margin-right: 5px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+} 
