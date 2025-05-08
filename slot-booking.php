@@ -5,92 +5,26 @@ require 'connect.php';
 $today = new DateTime('now');
 $todayFormatted = $today->format('Y-m-d');
 
-// Process form submission if applicable
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['selected_date']) && isset($_POST['selected_time'])) {
-        $selectedDate = $_POST['selected_date'];
-        $selectedTime = $_POST['selected_time'];
-        
-        // Standardize time format to prevent inconsistencies
-        $selectedTime = standardizeTimeFormat($selectedTime);
-        
-        // Check if the selected date and time are in the past
-        $selectedDateTime = new DateTime($selectedDate . ' ' . $selectedTime);
-        $currentDateTime = new DateTime();
-        $currentDateTime->modify('+4 minutes'); // Reduced from 15 to 4 minutes buffer
-        
-        if ($selectedDateTime < $currentDateTime) {
-            $_SESSION['booking_error'] = "Sorry, you cannot book appointments in the past or too close to the current time. Please select a future time slot.";
-            error_log("Booking attempt for past time: Date: $selectedDate, Time: $selectedTime");
-            header("Location: slot-booking.php");
-            exit;
-        }
-        
-        // Check if slot is already booked before proceeding - IMPROVED QUERY with error handling
-        try {
-            $checkQuery = "SELECT * FROM appointments 
-                          WHERE appointment_date = ? 
-                          AND appointment_time = ?";  // Removed status filter to check ALL appointments
-            $checkStmt = $conn->prepare($checkQuery);
-            
-            if (!$checkStmt) {
-                throw new Exception("Database prepare error: " . $conn->error);
-            }
-            
-            $checkStmt->bind_param("ss", $selectedDate, $selectedTime);
-            
-            if (!$checkStmt->execute()) {
-                throw new Exception("Database execute error: " . $checkStmt->error);
-            }
-            
-            $checkResult = $checkStmt->get_result();
-            
-            if ($checkResult->num_rows > 0) {
-                // Slot already booked - redirect back with error
-                $_SESSION['booking_error'] = "Sorry, this time slot has already been booked. Please select another time.";
-                error_log("Booking attempt for already booked slot: Date: $selectedDate, Time: $selectedTime");
-                header("Location: slot-booking.php");
-                exit;
-            }
-            
-            // Store in session and redirect to the form page
-            $_SESSION['appointment_date'] = $selectedDate;
-            $_SESSION['appointment_time'] = $selectedTime;
-            header("Location: registration-form.php");
-            exit;
-        } catch (Exception $e) {
-            // Log the error and show a user-friendly message
-            error_log("Error in slot booking: " . $e->getMessage());
-            $_SESSION['booking_error'] = "We encountered a technical issue. Please try again or contact support.";
-            header("Location: slot-booking.php");
-            exit;
-        }
-    }
+// Clear any old appointment data when loading the booking page
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    unset($_SESSION['appointment_date']);
+    unset($_SESSION['appointment_time']);
 }
 
-// Function to standardize time format (e.g., "10:30 AM" vs "10:30AM")
-function standardizeTimeFormat($timeStr) {
-    // Remove extra spaces
-    $timeStr = trim($timeStr);
-    
-    // Check if there's a space before AM/PM
-    if (preg_match('/(\d+:\d+)\s*(AM|PM)/i', $timeStr, $matches)) {
-        return $matches[1] . ' ' . strtoupper($matches[2]);
-    }
-    
-    // If no space before AM/PM, add one
-    if (preg_match('/(\d+:\d+)(AM|PM)/i', $timeStr, $matches)) {
-        return $matches[1] . ' ' . strtoupper($matches[2]);
-    }
-    
-    // Return original if no pattern matched
-    return $timeStr;
-}
-
-// Fetch booked slots from database with error handling
+// Fetch booked and available slots from database with error handling
 $bookedSlots = [];
+$availableSlots = [];
 try {
-    $query = "SELECT appointment_date, appointment_time FROM appointments"; // Get ALL appointments regardless of status
+    // Modified query to fetch all slots with proper time formatting
+    $query = "SELECT 
+                DATE_FORMAT(appointment_date, '%Y-%m-%d') as date,
+                TIME_FORMAT(appointment_time, '%l:%i %p') as formatted_time,
+                is_booked,
+                is_available
+             FROM appointments 
+             WHERE appointment_date >= CURDATE()
+             ORDER BY appointment_date, appointment_time";
+             
     $result = $conn->query($query);
     
     if (!$result) {
@@ -98,26 +32,416 @@ try {
     }
     
     while ($row = $result->fetch_assoc()) {
-        // Standardize time format for consistency
-        $standardizedTime = standardizeTimeFormat($row['appointment_time']);
-        // Store the exact format that will be used for comparison in JavaScript
-        $bookedSlots[] = $row['appointment_date'] . ' ' . $standardizedTime;
+        // Ensure time format is consistent by standardizing
+        $formattedTime = standardizeTimeFormat($row['formatted_time']);
+        $dateTimeKey = $row['date'] . ' ' . $formattedTime;
+        
+        // Debug log each slot
+        error_log(sprintf(
+            "Processing slot: %s (Booked: %d, Available: %d)",
+            $dateTimeKey,
+            $row['is_booked'],
+            $row['is_available']
+        ));
+        
+        // A slot is booked if is_booked = 1
+        if ($row['is_booked'] == 1) {
+            $bookedSlots[] = $dateTimeKey;
+        }
+        
+        // A slot is available if is_available = 1 AND is_booked = 0
+        if ($row['is_available'] == 1 && $row['is_booked'] == 0) {
+            $availableSlots[] = $dateTimeKey;
+        }
     }
     
-    // Debug - Log the number of booked slots found and the specific slots
-    error_log("Found " . count($bookedSlots) . " booked time slots");
-    foreach ($bookedSlots as $slot) {
-        error_log("Booked slot: " . $slot);
-    }
+    // Debug log the final arrays
+    error_log("Total booked slots: " . count($bookedSlots));
+    error_log("Total available slots: " . count($availableSlots));
+    
 } catch (Exception $e) {
-    // Log the error but continue with empty booked slots
-    error_log("Error fetching booked slots: " . $e->getMessage());
-    // Initialize empty array to prevent JavaScript errors
+    error_log("Error fetching slots: " . $e->getMessage());
     $bookedSlots = [];
+    $availableSlots = [];
 }
 
-// Add a cache-busting timestamp to prevent browser caching of booked slots
+// Function to log slot status
+function logSlotStatus($conn, $date, $time) {
+    $query = "SELECT id, appointment_date, appointment_time, 
+              TIME_FORMAT(appointment_time, '%l:%i %p') as formatted_time_12,
+              TIME_FORMAT(appointment_time, '%H:%i:%s') as formatted_time_24,
+              is_available, is_booked
+              FROM appointments 
+              WHERE appointment_date = ?";
+              
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("s", $date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    error_log("=== Slot Status Check ===");
+    error_log("Checking for date: $date, time: $time");
+    
+    while ($row = $result->fetch_assoc()) {
+        error_log(sprintf(
+            "ID: %d, Date: %s, Raw Time: %s, 12h: %s, 24h: %s, Available: %d, Booked: %d",
+            $row['id'],
+            $row['appointment_date'],
+            $row['appointment_time'],
+            $row['formatted_time_12'],
+            $row['formatted_time_24'],
+            $row['is_available'],
+            $row['is_booked']
+        ));
+    }
+    error_log("=== End Slot Status ===");
+}
+
+// Process form submission if applicable
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['selected_date']) && isset($_POST['selected_time'])) {
+        $selectedDate = trim($_POST['selected_date']);
+        $selectedTime = standardizeTimeFormat(trim($_POST['selected_time']));
+        
+        try {
+            // Start transaction
+            $conn->begin_transaction();
+            
+            // Log the exact input values
+            error_log("=== Booking Attempt ===");
+            error_log("Raw POST date: " . $_POST['selected_date']);
+            error_log("Raw POST time: " . $_POST['selected_time']);
+            error_log("Standardized date: " . $selectedDate);
+            error_log("Standardized time: " . $selectedTime);
+            
+            // Log current slot status
+            logSlotStatus($conn, $selectedDate, $selectedTime);
+            
+            // Check if the slot exists and is available with FOR UPDATE lock
+            $checkQuery = "SELECT id, is_available, is_booked, 
+                          TIME_FORMAT(appointment_time, '%l:%i %p') as formatted_time,
+                          appointment_time
+                          FROM appointments 
+                          WHERE appointment_date = ? 
+                          AND (
+                              TIME_FORMAT(appointment_time, '%l:%i %p') = ? 
+                              OR TIME_FORMAT(appointment_time, '%h:%i %p') = ?
+                              OR TIME_FORMAT(appointment_time, '%g:%i %p') = ?
+                          )
+                          FOR UPDATE";
+            
+            $checkStmt = $conn->prepare($checkQuery);
+            if (!$checkStmt) {
+                throw new Exception("Database prepare error: " . $conn->error);
+            }
+            
+            // Standardize the time format for comparison
+            $formattedTime = date('g:i A', strtotime($selectedTime));
+            error_log("Checking slot with formatted time: " . $formattedTime);
+            
+            $checkStmt->bind_param("ssss", $selectedDate, $formattedTime, $formattedTime, $formattedTime);
+            
+            if (!$checkStmt->execute()) {
+                throw new Exception("Database execute error: " . $checkStmt->error);
+            }
+            
+            $checkResult = $checkStmt->get_result();
+            
+            // Log the query results
+            error_log("Check query results - Number of rows: " . $checkResult->num_rows);
+            
+            if ($checkResult->num_rows === 0) {
+                throw new Exception("This slot is not available in our schedule.");
+            }
+            
+            $slotData = $checkResult->fetch_assoc();
+            error_log("Slot found - Details: " . print_r($slotData, true));
+            
+            // Verify slot is available and not booked
+            if ($slotData['is_booked'] == 1) {
+                throw new Exception("This slot has already been booked.");
+            }
+            
+            if ($slotData['is_available'] != 1) {
+                throw new Exception("This slot is not available for booking.");
+            }
+            
+            // Store in session for the registration form
+            $_SESSION['appointment_date'] = $selectedDate;
+            $_SESSION['appointment_time'] = $selectedTime;
+            $_SESSION['appointment_id'] = $slotData['id'];
+            
+            // Commit transaction
+            $conn->commit();
+            error_log("Successfully reserved slot - ID: " . $slotData['id']);
+            
+            header("Location: registration-form.php");
+            exit;
+            
+        } catch (Exception $e) {
+            if ($conn->inTransaction()) {
+                $conn->rollback();
+            }
+            error_log("Booking error: " . $e->getMessage());
+            $_SESSION['booking_error'] = $e->getMessage();
+            header("Location: slot-booking.php");
+            exit;
+        }
+    } else {
+        $_SESSION['booking_error'] = "Please select both date and time.";
+        header("Location: slot-booking.php");
+        exit;
+    }
+}
+
+// Function to standardize time format
+function standardizeTimeFormat($timeStr) {
+    // Remove extra spaces and convert to uppercase
+    $timeStr = trim(strtoupper($timeStr));
+    
+    // Ensure there's a space before AM/PM
+    $timeStr = preg_replace('/([AP])M/', ' $1M', $timeStr);
+    
+    // Remove double spaces
+    $timeStr = preg_replace('/\s+/', ' ', $timeStr);
+    
+    // Parse the time string to ensure consistent format
+    $timestamp = strtotime($timeStr);
+    if ($timestamp === false) {
+        error_log("Failed to parse time: $timeStr");
+        return $timeStr;
+    }
+    
+    // Format as h:i A (e.g., 9:00 AM)
+    $formatted = date('g:i A', $timestamp);
+    error_log("Standardized time format: $timeStr -> $formatted");
+    
+    return $formatted;
+}
+
+// Function to check if a time slot is in the past
+function isTimeSlotPast($date, $time) {
+    $now = new DateTime();
+    $slotDateTime = DateTime::createFromFormat('Y-m-d h:i A', $date . ' ' . $time);
+    return $slotDateTime < $now;
+}
+
+// Function to generate time slots
+function generateTimeSlots($date) {
+    global $conn;
+    $slots = [];
+    
+    try {
+        // Get time slots configuration from database
+        $configQuery = "SELECT slot_type, start_time, end_time, interval_minutes 
+                       FROM time_slots_config";
+        $configResult = $conn->query($configQuery);
+        
+        if (!$configResult) {
+            throw new Exception("Error fetching time slots configuration");
+        }
+        
+        while ($config = $configResult->fetch_assoc()) {
+            $startTime = strtotime($config['start_time']);
+            $endTime = strtotime($config['end_time']);
+            $interval = $config['interval_minutes'] * 60; // Convert to seconds
+            
+            for ($time = $startTime; $time < $endTime; $time += $interval) {
+                $timeStr = date('g:i A', $time);
+                
+                // Check if this slot exists and its status
+                $query = "SELECT is_available, is_booked 
+                         FROM appointments 
+                         WHERE appointment_date = ? 
+                         AND (
+                             TIME_FORMAT(appointment_time, '%l:%i %p') = ? 
+                             OR TIME_FORMAT(appointment_time, '%h:%i %p') = ?
+                             OR TIME_FORMAT(appointment_time, '%g:%i %p') = ?
+                         )";
+                         
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("ssss", $date, $timeStr, $timeStr, $timeStr);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    if (!$row['is_booked']) {
+                        if (!isTimeSlotPast($date, $timeStr)) {
+                            $slots[] = $timeStr;
+                        }
+                    }
+                }
+            }
+        }
+        
+        error_log("Generated slots for date $date: " . implode(", ", $slots));
+        
+    } catch (Exception $e) {
+        error_log("Error generating time slots: " . $e->getMessage());
+    }
+    
+    return $slots;
+}
+
+// Get available slots for a specific date
+function getAvailableSlots($date) {
+    global $conn;
+    $slots = [];
+    
+    try {
+        $query = "SELECT 
+                    TIME_FORMAT(appointment_time, '%h:%i %p') as formatted_time
+                  FROM appointments 
+                  WHERE appointment_date = ?
+                  AND is_booked = 0
+                  ORDER BY appointment_time";
+                  
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("s", $date);
+    $stmt->execute();
+        $result = $stmt->get_result();
+        
+        while ($row = $result->fetch_assoc()) {
+            $timeStr = standardizeTimeFormat($row['formatted_time']);
+            if (!isTimeSlotPast($date, $timeStr)) {
+                $slots[] = $timeStr;
+            }
+        }
+        
+        error_log("Available slots for $date: " . implode(", ", $slots));
+        
+} catch (Exception $e) {
+        error_log("Error getting available slots: " . $e->getMessage());
+    }
+    
+    return $slots;
+}
+
+// Handle AJAX request for slots
+if (isset($_GET['action']) && $_GET['action'] === 'get_slots') {
+    header('Content-Type: application/json');
+    
+    $date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
+    $slots = getAvailableSlots($date);
+    
+    echo json_encode([
+        'success' => true,
+        'slots' => $slots
+    ]);
+    exit;
+}
+
+// Handle slot selection
+if (isset($_GET['date']) && isset($_GET['time'])) {
+    $selectedDate = $_GET['date'];
+    $selectedTime = standardizeTimeFormat($_GET['time']);
+    
+    error_log("Booking attempt - Date: $selectedDate, Time: $selectedTime");
+    
+    if (!isTimeSlotPast($selectedDate, $selectedTime)) {
+        try {
+            $conn->begin_transaction();
+            
+            // First check if the slot exists and is available
+            $checkQuery = "SELECT id, is_booked 
+                          FROM appointments 
+                          WHERE appointment_date = ? 
+                          AND (
+                              TIME_FORMAT(appointment_time, '%h:%i %p') = ? 
+                              OR TIME_FORMAT(appointment_time, '%l:%i %p') = ? 
+                              OR TIME_FORMAT(appointment_time, '%g:%i %p') = ?
+                          )";
+            
+            $stmt = $conn->prepare($checkQuery);
+            if (!$stmt) {
+                throw new Exception("Failed to prepare query: " . $conn->error);
+            }
+            
+            $stmt->bind_param("ssss", $selectedDate, $selectedTime, $selectedTime, $selectedTime);
+            
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to execute query: " . $stmt->error);
+            }
+            
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                throw new Exception("This slot is not available in our schedule.");
+            }
+            
+            $slot = $result->fetch_assoc();
+            
+            if ($slot['is_booked'] == 1) {
+                throw new Exception("This slot has already been booked.");
+            }
+            
+            // Try to book the slot
+            $bookQuery = "UPDATE appointments 
+                         SET is_booked = 1 
+                         WHERE id = ? 
+                         AND is_booked = 0";
+            
+            $bookStmt = $conn->prepare($bookQuery);
+            if (!$bookStmt) {
+                throw new Exception("Failed to prepare booking query: " . $conn->error);
+            }
+            
+            $bookStmt->bind_param("i", $slot['id']);
+            
+            if (!$bookStmt->execute()) {
+                throw new Exception("Failed to book slot: " . $bookStmt->error);
+            }
+            
+            if ($bookStmt->affected_rows > 0) {
+                $_SESSION['appointment_date'] = $selectedDate;
+                $_SESSION['appointment_time'] = $selectedTime;
+                $_SESSION['appointment_id'] = $slot['id'];
+                
+                $conn->commit();
+                error_log("Successfully booked slot ID: " . $slot['id']);
+                
+                header("Location: registration-form.php");
+                exit;
+            } else {
+                throw new Exception("This slot was just booked by someone else.");
+            }
+            
+        } catch (Exception $e) {
+            if ($conn->inTransaction()) {
+                $conn->rollback();
+            }
+            error_log("Booking error: " . $e->getMessage());
+            $_SESSION['booking_error'] = $e->getMessage();
+            header("Location: slot-booking.php");
+            exit;
+        }
+    } else {
+        $_SESSION['booking_error'] = "This time slot has already passed.";
+        header("Location: slot-booking.php");
+        exit;
+    }
+}
+
+// Get today's date
+$today = date('Y-m-d');
+$slots = getAvailableSlots($today);
+
+// Convert PHP arrays to JavaScript with proper JSON encoding
+$availableSlotsJSON = json_encode($availableSlots);
+$bookedSlotsJSON = json_encode($bookedSlots);
+
+// Add debug output to verify data
+error_log("JSON encoded available slots: " . $availableSlotsJSON);
+error_log("JSON encoded booked slots: " . $bookedSlotsJSON);
+
+// Add cache-busting timestamp
+// Add a cache-busting timestamp to prevent browser caching of slots
 $cacheBuster = time();
+
+// Debug log the slots arrays
+error_log("Booked slots: " . json_encode($bookedSlots));
+error_log("Available slots: " . json_encode($availableSlots));
 ?>
 
 <!DOCTYPE html>
@@ -636,7 +960,10 @@ h2 {
 <body>
   <div class="modal">
     <button class="close-button" onclick="window.location.href='index.php';">×</button>
-    <h1>What time works best for a quick call?</h1>
+    <div style="text-align:center; margin-bottom: 18px;">
+      <img src="img/klogo-.png" alt="Kiran Hospital Logo" style="max-width: 120px; height: auto; display: inline-block;">
+    </div>
+    <h1>Schedule Your Appointment</h1>
     
     <?php if (isset($_SESSION['booking_error'])): ?>
       <div style="background-color: #ffebee; color: #c62828; padding: 10px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #c62828;">
@@ -645,7 +972,14 @@ h2 {
       <?php unset($_SESSION['booking_error']); ?>
     <?php endif; ?>
     
-    <form id="scheduleForm" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="alert alert-danger">
+            <?php echo htmlspecialchars($_SESSION['error']); ?>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+    
+    <form id="scheduleForm" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" onsubmit="return validateForm()">
       <input type="hidden" name="selected_date" id="selected_date_input">
       <input type="hidden" name="selected_time" id="selected_time_input">
       <input type="hidden" name="cache_buster" value="<?php echo $cacheBuster; ?>">
@@ -689,7 +1023,7 @@ h2 {
         </div>
       </div>
       
-      <button type="submit" class="submit-button" id="continue-button" disabled >Continue to Patient Details</button>
+      <button type="submit" class="submit-button" id="continue-button" disabled>Continue to Patient Details</button>
       
       <div class="footer">
         <span class="logo">Dr. Kiran Hospitals</span>
@@ -707,9 +1041,13 @@ h2 {
     let selectedTimeSlot = null;
     let selectedTimePeriod = null; // 'morning' or 'evening'
     
-    // Get booked slots from PHP and format check
-    const bookedSlots = <?php echo json_encode($bookedSlots); ?>;
-    console.log("Booked slots:", bookedSlots); // Debug
+    // Get booked and available slots from PHP
+    const bookedSlots = <?php echo $bookedSlotsJSON; ?>;
+    const availableSlots = <?php echo $availableSlotsJSON; ?>;
+    
+    // Debug log the arrays
+    console.log("Initial booked slots:", bookedSlots);
+    console.log("Initial available slots:", availableSlots);
     
     // Adjust to the start of the week (Sunday)
     const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
@@ -741,9 +1079,15 @@ h2 {
       
       // Set up form submission handler
       document.getElementById('scheduleForm').addEventListener('submit', function(e) {
-        if (!selectedTimeSlot) {
           e.preventDefault();
-          alert('Please select a time slot before continuing.');
+        
+        if (!selectedTimeSlot) {
+            showError('Please select a time slot before continuing.');
+            return false;
+        }
+        
+        if (!selectedDate) {
+            showError('Please select a date before continuing.');
           return false;
         }
         
@@ -752,12 +1096,48 @@ h2 {
         document.getElementById('selected_date_input').value = formattedDate;
         document.getElementById('selected_time_input').value = selectedTimeSlot;
         
-        // Extra check before form submission to prevent double booking
+        // Check if the slot is available
         const slotKey = `${formattedDate} ${selectedTimeSlot}`;
-        if (isTimeSlotBooked(formattedDate, selectedTimeSlot)) {
-          e.preventDefault();
-          alert('This slot has already been booked. Please select another time.');
+        console.log('Checking slot availability:', slotKey);
+        console.log('Available slots:', availableSlots);
+        
+        // Check if the slot exists in availableSlots
+        const isAvailable = availableSlots.some(slot => {
+            const [slotDate, slotTime, slotPeriod] = slot.split(' ');
+            const slotTimeStr = `${slotTime} ${slotPeriod}`;
+            return slotDate === formattedDate && slotTimeStr === selectedTimeSlot;
+        });
+        
+        if (!isAvailable) {
+            showError('This slot is not available. Please select another time.');
           return false;
+        }
+        
+        // Check if the slot is booked
+        const isBooked = bookedSlots.some(slot => {
+            const [slotDate, slotTime, slotPeriod] = slot.split(' ');
+            const slotTimeStr = `${slotTime} ${slotPeriod}`;
+            return slotDate === formattedDate && slotTimeStr === selectedTimeSlot;
+        });
+        
+        if (isBooked) {
+            showError('This slot has already been booked. Please select another time.');
+            return false;
+        }
+        
+        // Show loading state
+        const submitButton = document.getElementById('continue-button');
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        
+        // Submit the form
+        try {
+            this.submit();
+        } catch (error) {
+            console.error('Form submission error:', error);
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-arrow-right"></i> Continue to Patient Details';
+            showError('An error occurred. Please try again.');
         }
       });
       
@@ -953,188 +1333,200 @@ h2 {
       document.getElementById('continue-button').disabled = true;
     }
     
-    // Check if a time slot is booked - IMPROVED function with exact matching and error handling
+    // Check if a time slot is booked or unavailable - IMPROVED function
     function isTimeSlotBooked(dateStr, timeStr) {
-        // Make sure time format is consistent by removing extra spaces and standardizing
+        // Make sure time format is consistent
         const formattedTime = standardizeTimeFormat(timeStr);
         const slotDateTime = `${dateStr} ${formattedTime}`;
         
-        // Debug logging for better troubleshooting
-        console.log(`Checking if slot ${slotDateTime} is booked`);
+        // Debug logging
+        console.log(`Checking slot ${slotDateTime}`);
         
-        // Check exact match first
+        // Check if slot is booked
         const isBooked = bookedSlots.includes(slotDateTime);
         
-        // Enhanced debugging
-        if (isBooked) {
-            console.log(`BOOKED: ${slotDateTime} is booked!`);
-            return true;
-        }
+        // Check if slot is available (enabled by admin)
+        const isAvailable = availableSlots.includes(slotDateTime);
         
-        // Also check for time format variations (like '10:30 AM' vs '10:30AM')
-        for (let i = 0; i < bookedSlots.length; i++) {
-            const bookedSlot = bookedSlots[i];
-            const bookedDate = bookedSlot.split(' ')[0];
-            
-            // Skip if dates don't match
-            if (bookedDate !== dateStr) {
-                continue;
-            }
-            
-            // Extract time part (everything after the date)
-            let bookedTime = bookedSlot.substring(bookedDate.length).trim();
-            
-            // Compare standardized formats
-            if (standardizeTimeFormat(bookedTime) === formattedTime) {
-                console.log(`BOOKED (alternative format): ${slotDateTime} matches ${bookedSlot}`);
-                return true;
-            }
-        }
-        
-        return false;
+        // Slot is considered unavailable if it's either booked or not enabled by admin
+        return isBooked || !isAvailable;
     }
     
-    // Helper function to standardize time format in JavaScript
-    function standardizeTimeFormat(timeStr) {
-        timeStr = timeStr.trim();
-        
-        // Check if there's a space before AM/PM
-        const timeRegex = /(\d+:\d+)\s*(AM|PM)/i;
-        const match = timeStr.match(timeRegex);
-        
-        if (match) {
-            return `${match[1]} ${match[2].toUpperCase()}`;
-        }
-        
-        // If no space before AM/PM, add one
-        const noSpaceRegex = /(\d+:\d+)(AM|PM)/i;
-        const noSpaceMatch = timeStr.match(noSpaceRegex);
-        
-        if (noSpaceMatch) {
-            return `${noSpaceMatch[1]} ${noSpaceMatch[2].toUpperCase()}`;
-        }
-        
-        // Return original if no pattern matched
-        return timeStr;
-    }
-    
-    // Generate time slots - MODIFIED for better booked slot detection
+    // Generate time slots - MODIFIED to handle slots from database
     function generateTimeSlots() {
         const timeSlotsContainer = document.getElementById('time-slots-container');
         const noSlotsMessage = document.getElementById('no-slots-message');
         const continueButton = document.getElementById('continue-button');
         
-        // Exit if no time period is selected yet
-        if (!selectedTimePeriod) {
-            timeSlotsContainer.style.display = 'none';
-            noSlotsMessage.style.display = 'none';
-            return;
-        }
-        
+        // Clear previous slots and reset state
         timeSlotsContainer.innerHTML = '';
         continueButton.disabled = true;
         selectedTimeSlot = null;
         
-        // Check if selected date is a Sunday
-        if (selectedDate.getDay() === 0) {
-            noSlotsMessage.textContent = "Sorry, we are closed on Sundays. Please select another day.";
+        if (!selectedTimePeriod || !selectedDate) {
+            timeSlotsContainer.style.display = 'none';
+            noSlotsMessage.style.display = 'none';
+            return;
+        }
+        
+        // Format the selected date
+        const formattedDate = `${selectedDate.getFullYear()}-${(selectedDate.getMonth() + 1).toString().padStart(2, '0')}-${selectedDate.getDate().toString().padStart(2, '0')}`;
+        
+        console.log('Generating slots for date:', formattedDate);
+        console.log('Time period:', selectedTimePeriod);
+        console.log('Available slots:', availableSlots);
+        
+        // Get current time
+        const now = new Date();
+        const isToday = selectedDate.toDateString() === now.toDateString();
+        
+        // Generate all possible time slots for the selected period
+        let timeSlots = [];
+        if (selectedTimePeriod === 'morning') {
+            for (let time = morningStartTime; time <= morningEndTime; time += interval) {
+                const hour = Math.floor(time / 60);
+                const minute = time % 60;
+                const period = hour >= 12 ? 'PM' : 'AM';
+                const hour12 = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+                const timeStr = `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
+                
+                // Only add slots that exist in availableSlots
+                const slotKey = `${formattedDate} ${timeStr}`;
+                if (availableSlots.includes(slotKey)) {
+                    timeSlots.push(timeStr);
+                }
+            }
+        } else {
+            for (let time = eveningStartTime; time <= eveningEndTime; time += interval) {
+                const hour = Math.floor(time / 60);
+                const minute = time % 60;
+                const period = hour >= 12 ? 'PM' : 'AM';
+                const hour12 = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+                const timeStr = `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
+                
+                // Only add slots that exist in availableSlots
+                const slotKey = `${formattedDate} ${timeStr}`;
+                if (availableSlots.includes(slotKey)) {
+                    timeSlots.push(timeStr);
+                }
+            }
+        }
+        
+        // Filter out past time slots if it's today
+        if (isToday) {
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            const currentTime = currentHour * 60 + currentMinute;
+            
+            timeSlots = timeSlots.filter(timeStr => {
+                const [time, period] = timeStr.split(' ');
+                const [hours, minutes] = time.split(':');
+                let slotHour = parseInt(hours);
+                const slotMinute = parseInt(minutes);
+                
+                // Convert to 24-hour format
+                if (period === 'PM' && slotHour !== 12) slotHour += 12;
+                if (period === 'AM' && slotHour === 12) slotHour = 0;
+                
+                const slotTime = slotHour * 60 + slotMinute;
+                return slotTime > currentTime + 30; // Add 30-minute buffer
+            });
+        }
+        
+        // Create time slot elements
+        if (timeSlots.length === 0) {
+            noSlotsMessage.textContent = "No available time slots for this time period. Please try another time period or date.";
             noSlotsMessage.style.display = 'block';
             timeSlotsContainer.style.display = 'none';
             return;
         }
         
-        // Format selected date for checking booked slots - ENSURING YYYY-MM-DD FORMAT
-        const year = selectedDate.getFullYear();
-        const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
-        const day = selectedDate.getDate().toString().padStart(2, '0');
-        const formattedDate = `${year}-${month}-${day}`;
+        timeSlotsContainer.style.display = 'grid';
+        noSlotsMessage.style.display = 'none';
         
-        console.log("Checking slots for date:", formattedDate); // Debug
-        
-        // Get current time in minutes if the selected date is today
-        let currentTimeMinutes = 0;
-        const isSelectedDateToday = isSameDate(selectedDate, today);
-        
-        if (isSelectedDateToday) {
-            // Get current time and add a buffer to prevent booking too close to current time
-            const now = new Date();
-            currentTimeMinutes = now.getHours() * 60 + now.getMinutes() + 4; // Reduced from 15 to 4 min buffer
-            // Round up to the next 15-minute interval
-            currentTimeMinutes = Math.ceil(currentTimeMinutes / interval) * interval;
-            console.log("Current time in minutes (with buffer):", currentTimeMinutes);
-        }
-        
-        let hasAvailableSlots = false;
-        
-        // Generate time slots based on selected period (morning or evening)
-        let startTime, endTime;
-        
-        if (selectedTimePeriod === 'morning') {
-            startTime = morningStartTime;
-            endTime = morningEndTime;
-        } else {
-            startTime = eveningStartTime;
-            endTime = eveningEndTime;
-        }
-        
-        for (let minutes = startTime; minutes < endTime; minutes += interval) {
-            // Skip time slots in the past for today
-            if (isSelectedDateToday && minutes < currentTimeMinutes) {
-                console.log(`Skipping past time slot: ${Math.floor(minutes/60)}:${(minutes%60).toString().padStart(2, '0')} (${minutes} min) < current time (${currentTimeMinutes} min)`);
-                continue;
-            }
+        timeSlots.forEach(timeStr => {
+            const slotKey = `${formattedDate} ${timeStr}`;
+            const isBooked = bookedSlots.includes(slotKey);
             
-            const hour = Math.floor(minutes / 60);
-            const minute = minutes % 60;
+            const slotContainer = document.createElement('div');
+            slotContainer.className = 'time-slot-container';
+            slotContainer.style.position = 'relative';
             
-            // Format time as 12-hour with AM/PM
-            const period = hour >= 12 ? 'PM' : 'AM';
-            const displayHour = hour % 12 || 12;
-            const displayMinute = minute.toString().padStart(2, '0');
-            const timeDisplay = `${displayHour}:${displayMinute} ${period}`;
+                    const timeSlot = document.createElement('div');
+                    timeSlot.className = 'time-slot';
+            timeSlot.textContent = timeStr;
             
-            // Create time slot element
-            const timeSlot = document.createElement('div');
-            timeSlot.textContent = timeDisplay;
-            timeSlot.dataset.time = timeDisplay;
-            timeSlot.dataset.datetime = `${formattedDate} ${timeDisplay}`;
-            
-            // Check if this time slot is booked in the database
-            const isBooked = isTimeSlotBooked(formattedDate, timeDisplay);
-            timeSlot.className = `time-slot${isBooked ? ' disabled' : ''}`;
-            
-            // Only add click handler if the slot is not booked
-            if (!isBooked) {
-                hasAvailableSlots = true;
+            if (isBooked) {
+                timeSlot.classList.add('disabled');
+                timeSlot.title = 'This slot is already booked';
                 
-                timeSlot.addEventListener('click', function() {
-                    // Double-check if the slot is still available
-                    if (isTimeSlotBooked(formattedDate, timeDisplay)) {
-                        alert('Sorry, this slot was just booked. Please select another time.');
-                        this.classList.add('disabled');
-                        return;
-                    }
+                // Add delete button for booked slots
+                if (isAdmin) { // You'll need to set this variable based on user role
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-slot-btn';
+                    deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                    deleteBtn.style.position = 'absolute';
+                    deleteBtn.style.right = '5px';
+                    deleteBtn.style.top = '50%';
+                    deleteBtn.style.transform = 'translateY(-50%)';
+                    deleteBtn.style.background = '#ff4444';
+                    deleteBtn.style.color = 'white';
+                    deleteBtn.style.border = 'none';
+                    deleteBtn.style.borderRadius = '50%';
+                    deleteBtn.style.width = '24px';
+                    deleteBtn.style.height = '24px';
+                    deleteBtn.style.cursor = 'pointer';
+                    deleteBtn.title = 'Delete this booking';
                     
-                    document.querySelectorAll('.time-slot').forEach(slot => {
-                        slot.classList.remove('selected');
-                    });
+                    deleteBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        if (confirm('Are you sure you want to delete this booking?')) {
+                            try {
+                                const response = await fetch('delete_booking.php', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/x-www-form-urlencoded',
+                                    },
+                                    body: `date=${formattedDate}&time=${timeStr}`
+                                });
+                                
+                                const data = await response.json();
+                                if (data.success) {
+                                    // Remove from booked slots
+                                    const index = bookedSlots.indexOf(slotKey);
+                                    if (index > -1) {
+                                        bookedSlots.splice(index, 1);
+                                    }
+                                    // Add to available slots
+                                    if (!availableSlots.includes(slotKey)) {
+                                        availableSlots.push(slotKey);
+                                    }
+                                    // Regenerate time slots
+                                    generateTimeSlots();
+                                } else {
+                                    alert(data.message || 'Error deleting booking');
+                                }
+                            } catch (error) {
+                                console.error('Error:', error);
+                                alert('Error deleting booking');
+                }
+            }
+        });
+        
+                    slotContainer.appendChild(deleteBtn);
+                }
+        } else {
+                timeSlot.addEventListener('click', function() {
+                    document.querySelectorAll('.time-slot').forEach(s => s.classList.remove('selected'));
                     this.classList.add('selected');
-                    selectedTimeSlot = this.dataset.time;
+                    selectedTimeSlot = timeStr;
                     continueButton.disabled = false;
                 });
             }
             
-            timeSlotsContainer.appendChild(timeSlot);
-        }
-        
-        // Show or hide the "no slots available" message
-        if (hasAvailableSlots) {
-            noSlotsMessage.style.display = 'none';
-            timeSlotsContainer.style.display = 'grid';
-        } else {
-            noSlotsMessage.style.display = 'block';
-            timeSlotsContainer.style.display = 'none';
-        }
+            slotContainer.appendChild(timeSlot);
+            timeSlotsContainer.appendChild(slotContainer);
+        });
     }
     
     // Check if two dates are the same (ignoring time)
@@ -1176,6 +1568,44 @@ h2 {
     window.addEventListener('beforeunload', function() {
         clearTimeout(refreshTimer);
     });
+
+    // Helper function to show error messages
+    function showError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.style.backgroundColor = '#ffebee';
+        errorDiv.style.color = '#c62828';
+        errorDiv.style.padding = '10px';
+        errorDiv.style.borderRadius = '5px';
+        errorDiv.style.marginBottom = '20px';
+        errorDiv.style.borderLeft = '4px solid #c62828';
+        errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+        
+        // Remove any existing error messages
+        const existingErrors = document.querySelectorAll('[data-error-message]');
+        existingErrors.forEach(error => error.remove());
+        
+        // Add the new error message
+        errorDiv.setAttribute('data-error-message', '');
+        document.querySelector('form').insertBefore(errorDiv, document.querySelector('form').firstChild);
+        
+        // Scroll to error message
+        errorDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Update form validation to remove captcha check
+    function validateForm() {
+        if (!selectedDate) {
+            showError('Please select a date.');
+            return false;
+        }
+
+        if (!selectedTimeSlot) {
+            showError('Please select a time slot.');
+            return false;
+        }
+
+        return true;
+    }
   </script>
 </body>
 </html>
