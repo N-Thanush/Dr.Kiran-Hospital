@@ -1,0 +1,6 @@
+INSERT INTO STOCKS(suppliername, medicine, product, batches, packs, quamtity, free, rate, disciount, gst, rankid, mrp, expiry, amount, hsn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+
+$stmt = $conn->prepare("INSERT INTO STOCKS(suppliername, medicine, product, batches, packs, quamtity, free, rate, disciount, gst, rankid, mrp, expiry, amount, hsn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"); 
+  $stmt->bind_param("ssssiiidddidsds",$sd_amount, $name, $dl_no, $gst, $fssai, $phone); 
+  $stmt->execute();
