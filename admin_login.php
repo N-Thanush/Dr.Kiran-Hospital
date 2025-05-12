@@ -21,7 +21,7 @@ if (isset($_GET['logout'])) {
 
 // Check if already logged in
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
-    header('Location: admin_calendar.php');
+    header('Location: admin_management.php');
     exit();
 }
 
@@ -43,28 +43,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = isset($_POST['username']) ? trim($_POST['username']) : '';
     $password = isset($_POST['password']) ? $_POST['password'] : '';
     
-    // Log login attempt
-    error_log("Login attempt: Username: '$username'");
-    
     // Simple validation
     if (empty($username) || empty($password)) {
         $loginError = true;
         $errorMessage = 'Please enter both username and password';
-        error_log("Login failed: Empty username or password");
     } else {
         $loginSuccessful = false;
         
-        // FIRST METHOD: Direct check with hard-coded credentials - simple and reliable
+        // Check credentials
         if ($username === ADMIN_USERNAME && $password === ADMIN_PASSWORD) {
             $loginSuccessful = true;
-            error_log("Login successful using hard-coded credentials for: $username");
-        } 
-        // SECOND METHOD: Try database login only if first method fails
-        else {
+        } else {
             try {
                 require_once 'connect.php';
                 
-                // Check if admin exists in database
                 $query = "SELECT * FROM admin_users WHERE username = ?";
                 $stmt = $conn->prepare($query);
                 
@@ -75,34 +67,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     if ($result && $result->num_rows === 1) {
                         $admin = $result->fetch_assoc();
-                        
-                        // Try password verification
                         if (password_verify($password, $admin['password'])) {
                             $loginSuccessful = true;
-                            error_log("Login successful using database credentials for: $username");
                         }
                     }
                 }
             } catch (Exception $e) {
                 error_log("Database error during login: " . $e->getMessage());
-                // Continue to error message
             }
         }
         
-        // Process login result
         if ($loginSuccessful) {
             // Set session variables
             $_SESSION['admin_logged_in'] = true;
             $_SESSION['admin_username'] = $username;
             
             // Redirect to admin dashboard
-            header('Location: admin_calendar.php');
+            header('Location: admin_management.php?login_success=1');
             exit();
         } else {
-            // Login failed
             $loginError = true;
             $errorMessage = 'Invalid username or password';
-            error_log("Login failed for user: $username - Invalid credentials");
         }
     }
 }
@@ -115,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Admin Login - Dr. Kiran Neuro Centre</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <style>
         body {
             background-color: #f8f9fa;
@@ -191,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
             
-            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" id="loginForm">
                 <div class="mb-3">
                     <label for="username" class="form-label">Username</label>
                     <div class="input-group">
@@ -224,11 +210,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
     
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script>
         // Prevent form resubmission on page refresh
         if (window.history.replaceState) {
             window.history.replaceState(null, null, window.location.href);
         }
+
+        // Function to show Toastify notification
+        function showNotification(message, type = 'success') {
+            Toastify({
+                text: message,
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                backgroundColor: type === 'success' ? "#4CAF50" : "#f44336",
+                stopOnFocus: true
+            }).showToast();
+        }
+
+        // Show notifications based on URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('logged_out')) {
+            showNotification('You have been successfully logged out', 'success');
+        }
+        if (urlParams.has('login_success')) {
+            showNotification('Login successful!', 'success');
+        }
+
+        // Handle form submission
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!username || !password) {
+                e.preventDefault();
+                showNotification('Please enter both username and password', 'error');
+            }
+        });
     </script>
 </body>
 </html> 
