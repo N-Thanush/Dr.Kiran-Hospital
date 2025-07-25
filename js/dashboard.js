@@ -10,45 +10,25 @@
     });
 
     // Handle section switching
-    // Generic function to switch active section
-    function switchSection(activeSectionId) {
-        document.getElementById('dashboardBlocks').style.display = 'none';
-
-        const sections = [
-            'stock-entry-content',
-            'view-stock-content',
-            'suppliers-content',
-            'make-bill-content',
-            'supplier-add-content',
-        ];
-
-        sections.forEach(sectionId => {
-            const element = document.getElementById(sectionId);
-            element.classList.toggle('active', sectionId === activeSectionId);
-        });
-    }
-
-    // Specific functions
     function billfunction() {
-        switchSection('make-bill-content');
+        document.getElementById('dashboardBlocks').style.display = 'none';
+        document.getElementById('make-bill-content').classList.add('active');
     }
 
     function stockentryfunction() {
-        switchSection('stock-entry-content');
+        document.getElementById('dashboardBlocks').style.display = 'none';
+        document.getElementById('stock-entry-content').classList.add('active');
     }
 
     function viewstockfunction() {
-        switchSection('view-stock-content');
+        document.getElementById('dashboardBlocks').style.display = 'none';
+        document.getElementById('view-stock-content').classList.add('active');
     }
 
     function supplierlistfunction() {
-        switchSection('suppliers-content');
-
+        document.getElementById('dashboardBlocks').style.display = 'none';
+        document.getElementById('suppliers-content').classList.add('active');
     }
-    function addsupplier() {
-        switchSection('supplier-add-content');
-    }
-
 
     // Handle back to dashboard
     document.addEventListener('click', function(e) {
@@ -85,8 +65,7 @@
         $.ajax({
             url: 'pharmacy_actions.php',
             type: 'POST',
-            data: Object.fromEntries(formData.entries()),
-
+            data: Object.fromEntries(formData),
             success: function(response) {
                 if (response === 'success') {
                     alert('Stock entry added successfully');
@@ -100,26 +79,26 @@
         });
     }
 
-    // function viewAllStock() {
-    //     $.ajax({
-    //         url: 'pharmacy_actions.php',
-    //         type: 'POST',
-    //         data: {
-    //             action: 'view_all'
-    //         },
-    //         success: function(response) {
-    //             document.getElementById('stockList').innerHTML = response;
-    //         }
-    //     });
-    // }
+    function viewAllStock() {
+        $.ajax({
+            url: 'pharmacy_actions.php',
+            type: 'POST',
+            data: {
+                action: 'view_all'
+            },
+            success: function(response) {
+                document.getElementById('stockList').innerHTML = response;
+            }
+        });
+    }
 
-    // // Load all stock on page load
-    // document.addEventListener('DOMContentLoaded', function() {
-    //     viewAllStock();
-    // });
+    // Load all stock on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        viewAllStock();
+    });
 
     window.addEventListener("pageshow", function(event) {
-        if (event.persisted || performance.getEntriesByType("navigation")[0].type === "back_forward") {
+        if (event.persisted || window.performance.navigation.type === 2) {
             window.location.reload();
         }
     });

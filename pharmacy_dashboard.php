@@ -10,13 +10,6 @@ if (!isset($_SESSION['pharmacy_user_id']) || empty($_SESSION['pharmacy_user_id']
     exit();
 }
 
-if (isset($_GET['delete'])) {
-    $id = $_GET['delete'];
-    $stmt = $conn->prepare("DELETE FROM SUPPLIERS WHERE ID = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-}
-
 // Prevent caching
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Cache-Control: post-check=0, pre-check=0", false);
@@ -38,12 +31,8 @@ require_once 'connect.php';
     <title>Pharmacy Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/boxicons@2.0.7/css/boxicons.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-
     <link href="css/pharmacy_dashboard.css" rel="stylesheet">
     <script src="js/dashboard.js" defer></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
     <style>
         :root {
             --sidebar-width: 250px;
@@ -66,7 +55,6 @@ require_once 'connect.php';
 
         .sidebar.collapsed {
             width: var(--sidebar-collapsed-width);
-            padding-right: 6%;
         }
 
         .main-content {
@@ -90,10 +78,7 @@ require_once 'connect.php';
         .nav-link:hover {
             background: rgba(255, 235, 235, 0.1);
             color: white;
-            cursor: grab;
         }
-
-
 
         .nav-link i {
             margin-right: 10px;
@@ -180,26 +165,22 @@ require_once 'connect.php';
             display: flex;
             align-items: center;
             gap: 10px;
-            padding-left: 3%;
         }
 
         .logout-btn {
             background: #1e3c72;
             color: white;
             border: none;
-            padding: 10px 25px;
+            padding: 8px 15px;
             border-radius: 5px;
             cursor: pointer;
             transition: all 0.3s;
         }
 
         .logout-btn:hover {
-            background: rgb(250, 7, 7);
+            background: #152a4f;
         }
-
-        .addsupplier {
-            display: none;
-        }
+        
     </style>
 </head>
 
@@ -207,37 +188,29 @@ require_once 'connect.php';
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <button class="toggle-sidebar" id="toggleSidebar">
-            <i class='bx bx-menu '></i>
+            <i class='bx bx-menu'></i>
         </button>
         <div class="nav flex-column">
             <a class="nav-link mt-3" href="pharmacy_dashboard.php">
-                <i class='bx bx-home '></i>
+                <i class='bx bx-home'></i>
                 <span>Home</span>
             </a>
-            <div class="nav-link mt-3" onclick="billfunction()">
-                <i class='bx bx-receipt '></i>
+            <a class="nav-link mt-3" href="#" data-section="make-bill">
+                <i class='bx bx-receipt'></i>
                 <span>Make a Bill</span>
-            </div>
-            <div class="nav-link mt-3" onclick="stockentryfunction()">
-                <i class='bx bx-plus-circle '></i>
+            </a>
+            <a class="nav-link mt-3" href="#" data-section="stock-entry">
+                <i class='bx bx-plus-circle'></i>
                 <span>Stock Entry</span>
-            </div>
-            <div class="nav-link mt-3" onclick="viewstockfunction()">
-                <i class='bx bx-list-ul '></i>
+            </a>
+            <a class="nav-link mt-3" href="#" data-section="view-stock">
+                <i class='bx bx-list-ul'></i>
                 <span>View Stock List</span>
-            </div>
-            <div class="nav-link mt-3"
-                onclick="supplierlistfunction();document.getElementById('sidebaraddsupplier').style.display='block'">
-                <i class='bx bx-group '></i>
+            </a>
+            <a class="nav-link mt-3" href="#" data-section="suppliers">
+                <i class='bx bx-group'></i>
                 <span>Suppliers List</span>
-
-            </div>
-            <div class="addsupplier nav-link mt-1" id="sidebaraddsupplier" onclick="addsupplier()">
-                <i class="fa fa-plus ">
-                </i>
-                <span>Supplier</span>
-            </div>
-
+            </a>
         </div>
     </div>
 
@@ -249,7 +222,7 @@ require_once 'connect.php';
                 <div class="row align-items-center">
                     <div class="col-4">
                         <div class="user-info">
-                            <i class=' bx bx-user'></i>
+                            <i class='bx bx-user'></i>
                             <span><?php echo htmlspecialchars($_SESSION['pharmacy_username']); ?></span>
                         </div>
                     </div>
@@ -260,9 +233,8 @@ require_once 'connect.php';
                         </div>
                     </div>
                     <div class="col-4 text-end">
-                        <a href="pharmacy_logout.php" class="logout-btn text-decoration-none"><i
-                                class='bx bx-log-out'></i>
-                            Logout
+                        <a href="pharmacy_logout.php" class="logout-btn">
+                            <i class='bx bx-log-out'></i> Logout
                         </a>
                     </div>
                 </div>
@@ -273,35 +245,34 @@ require_once 'connect.php';
         <div class="container mt-5 pt-5">
             <div class="row" id="dashboardBlocks">
                 <div class="col-md-6 col-lg-6 ">
-                    <div class="dashboard-block " onclick="billfunction()">
+                    <div class="dashboard-block " onclick="billfunction()" id="makeBill">
                         <i class='bx bx-receipt'></i>
                         <h4>Make a Bill </h4>
                         <p>Create and manage bills</p>
                     </div>
                 </div>
-                <div class=" col-md-6 col-lg-6">
-                    <div class="dashboard-block" onclick="stockentryfunction()">
+                <div class="col-md-6 col-lg-6">
+                    <div class="dashboard-block" onclick="stockentryfunction()" id="stockEntry">
                         <i class='bx bx-plus-circle'></i>
                         <h4>Stock Entry</h4>
                         <p>Add new stock items</p>
                     </div>
                 </div>
                 <div class="col-md-6 col-lg-6 ">
-                    <div class="dashboard-block" onclick="viewstockfunction()">
+                    <div class="dashboard-block" onclick="viewstockfunction()" id="viewStock">
                         <i class='bx bx-list-ul'></i>
                         <h4>View Stock List</h4>
                         <p>View and manage stock</p>
                     </div>
                 </div>
                 <div class="col-md-6 col-lg-6">
-                    <div class="dashboard-block" onclick="supplierlistfunction()">
+                    <div class="dashboard-block" onclick="supplierlistfunction()" id="supplierList">
                         <i class='bx bx-group'></i>
                         <h4>Suppliers List</h4>
                         <p>Manage suppliers</p>
                     </div>
                 </div>
             </div>
-
 
             <!-- Section Contents -->
             <div id="sectionContents">
@@ -310,144 +281,50 @@ require_once 'connect.php';
                     <h2>Make a Bill</h2>
                     <!-- Add your bill creation form here -->
                 </div>
+
                 <!-- Stock Entry Section -->
                 <div class="section-content" id="stock-entry-content">
                     <h2>Stock Entry</h2>
                     <!-- Add your stock entry form here -->
                 </div>
+
                 <!-- View Stock Section -->
                 <div class="section-content" id="view-stock-content">
                     <h2>View Stock List</h2>
                     <!-- Add your stock list table here -->
                 </div>
                 <div class="section-content" id="supplier-add-content">
-                    <!-- start: page -->
-                    <form class="ecommerce-form action-buttons-fixed mt-3" action="#" method="post">
-                        <div class="row">
-                            <div class="col">
-                                <section class="card card-modern card-big-info">
-                                    <div class="card-body">
-                                        <div class="row">
 
-                                            <div class="col-lg-3-5 col-xl-4-5">
-                                                <div class="form-group row align-items-center pb-3">
-                                                    <label class="col-lg-5 col-xl-3 control-label text-lg-end mb-0">SD
-                                                        Amount</label>
-                                                    <div class="col-lg-7 col-xl-6">
-                                                        <input type="text" class="form-control form-control-modern"
-                                                            name="sd-amount" value="" required />
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row align-items-center pb-3">
-                                                    <label
-                                                        class="col-lg-5 col-xl-3 control-label text-lg-end mb-0">Name</label>
-                                                    <div class="col-lg-7 col-xl-6">
-                                                        <input type="text" class="form-control form-control-modern"
-                                                            name="Name" value="" required />
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row align-items-center pb-3">
-                                                    <label class="col-lg-5 col-xl-3 control-label text-lg-end mb-0">DL
-                                                        No.</label>
-                                                    <div class="col-lg-7 col-xl-6">
-                                                        <input type="text" class="form-control form-control-modern"
-                                                            name="dl-no" value="" />
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row align-items-center pb-3">
-                                                    <label
-                                                        class="col-lg-5 col-xl-3 control-label text-lg-end mb-0">GSTIN</label>
-                                                    <div class="col-lg-7 col-xl-6">
-                                                        <input type="text" class="form-control form-control-modern"
-                                                            name="gst" value="" required />
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row align-items-center pb-3">
-                                                    <label
-                                                        class="col-lg-5 col-xl-3 control-label text-lg-end mb-0">FSSAI</label>
-                                                    <div class="col-lg-7 col-xl-6">
-                                                        <input type="text" class="form-control form-control-modern"
-                                                            name="fassai" value="" />
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row align-items-center pb-3">
-                                                    <label
-                                                        class="col-lg-5 col-xl-3 control-label text-lg-end mb-0">Phone</label>
-                                                    <div class="col-lg-7 col-xl-6">
-                                                        <input type="text" class="form-control form-control-modern"
-                                                            name="phone" value="" required />
-                                                    </div>
-                                                </div>
-                                                <div class="row action-buttons mt-3" style="padding-left: 40%;">
-                                                    <div class="col-12 col-md-auto mx-5 mb-3 mb-md-0">
-                                                        <button type="submit"
-                                                            class="submit-button btn btn-primary btn-px-4 py-3 d-flex align-items-center font-weight-semibold line-height-1"
-                                                            data-loading-text="Loading..." name="submit">
-                                                            <i class="bx bx-save text-4 me-2"></i> Save Supplier
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </section>
-                            </div>
-                        </div>
-                    </form>
-                    <?php
-                    if (isset($_POST['submit'])) {
-                        $sd_amount = $_POST['sd-amount'];
-                        $name = $_POST['Name'];
-                        $dl_no = $_POST['dl-no'];
-                        $gst = $_POST['gst'];
-                        $fssai = $_POST['fassai'];
-                        $phone = $_POST['phone'];
-                        $form_success = true;
-
-                        $stmt = $conn->prepare("INSERT INTO SUPPLIERS (sd_amount, name, dl_no, gst, fssai, phone) VALUES (?, ?, ?, ?, ?, ?)");
-                        $stmt->bind_param("dsssss", $sd_amount, $name, $dl_no, $gst, $fssai, $phone);
-                        $stmt->execute();
-
-                        if ($form_success) {
-                            echo " <script>
-							window.opener.location.href = 'pharmacy_dashboard.php';
-							window.close();
-							alert('Supplier Added Successfully');
-						</script>";
-                        } else {
-                            echo "error:" . $conn->error;
-                        }
-                    }
-                    ?>
-                    <!-- end: page -->
                 </div>
+
                 <!-- Suppliers Section -->
                 <div class="section-content" id="suppliers-content">
                     <div class="card card-modern">
                         <div class="card-body">
                             <div class="datatables-header-footer-wrapper">
                                 <div class="datatable-header">
-
                                     <div class="row align-items-center mb-3">
-                                        <div class="col-8 col-lg-auto  ml-auto mb-3 mb-lg-0 "
-                                            style="padding-right: 15%;">
+                                        <div class="col-12 col-lg-auto mb-3 mb-lg-0 btn btn-primary btn-md font-weight-semibold btn-py-2 px-4" data-section="supplier-add">
+                                            <i class="bx bx-plus text-4 me-2"></i> Add New Supplier
+                                        </div>
+                                        <div class="col-8 col-lg-auto ms-auto ml-auto mb-3 mb-lg-0">
                                             <div class="d-flex align-items-lg-center flex-column flex-lg-row">
                                                 <label class="ws-nowrap me-3 mb-0">Filter By:</label>
                                                 <select class="form-control select-style-1 filter-by" name="filter-by">
                                                     <option value="all" selected>All</option>
-                                                    <option value="1">Name</option>
+                                                    <option value="1">ID</option>
+                                                    <option value="2">Name</option>
                                                     <option value="3">Phone</option>
-                                                    <option value="2">Dl No</option>
-                                                    <option value="4">GST No</option>
-                                                    <option value="6">SD Amount</option>
+                                                    <option value="4">E-mail</option>
+                                                    <option value="5">Orders</option>
+                                                    <option value="6">Total Amount</option>
                                                 </select>
                                             </div>
                                         </div>
-                                        <div class="col-4 col-lg-auto ps-lg-1 mb-3 mb-lg-0" style="padding-right: 15%;">
-                                            <div class=" d-flex align-items-lg-center flex-column flex-lg-row">
+                                        <div class="col-4 col-lg-auto ps-lg-1 mb-3 mb-lg-0">
+                                            <div class="d-flex align-items-lg-center flex-column flex-lg-row">
                                                 <label class="ws-nowrap me-3 mb-0">Show:</label>
-                                                <select class="form-control select-style-1 results-per-page"
-                                                    name="results-per-page">
+                                                <select class="form-control select-style-1 results-per-page" name="results-per-page">
                                                     <option value="12" selected>12</option>
                                                     <option value="24">24</option>
                                                     <option value="36">36</option>
@@ -456,31 +333,25 @@ require_once 'connect.php';
                                             </div>
                                         </div>
                                         <div class="col-12 col-lg-auto ps-lg-1">
-                                            <div class="search search-style-1 search-style-1-lg mx-lg-auto"
-                                                style="padding-left: 15%;">
+                                            <div class="search search-style-1 search-style-1-lg mx-lg-auto">
                                                 <div class="input-group">
-                                                    <input type="text" class="search-term form-control"
-                                                        name="search-term" id="search-term"
-                                                        placeholder="Search Customer">
-                                                    <button class="btn btn-default" type="submit"><i
-                                                            class="bx bx-search"></i></button>
+                                                    <input type="text" class="search-term form-control" name="search-term" id="search-term" placeholder="Search Customer">
+                                                    <button class="btn btn-default" type="submit"><i class="bx bx-search"></i></button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <table class="table table-ecommerce-simple table-striped mb-0"
-                                    id="datatable-ecommerce-list" style="min-width: 750px;">
+                                <table class="table table-ecommerce-simple table-striped mb-0" id="datatable-ecommerce-list" style="min-width: 750px;">
 
                                     <thead>
                                         <tr>
-                                            <th width="25%">Name</th>
-                                            <th width="10%">Phone</th>
-                                            <th width="10%">Dl no</th>
-                                            <th width="20%">GST NO</th>
+                                            <th width="32%">Name</th>
+                                            <th width="18%">Phone</th>
+                                            <th width="25%">Dl no</th>
+                                            <th width="28%">GST NO</th>
                                             <th width="10%">SD Amout</th>
-                                            <th width="15%">E & D</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -488,21 +359,17 @@ require_once 'connect.php';
                                         // Fetch suppliers from the database
                                         $result = $conn->query("SELECT * FROM SUPPLIERS ORDER BY sd_amount DESC");
                                         while ($row = $result->fetch_assoc()):
-                                            ?>
+                                        ?>
                                             <tr>
                                                 <td><?= $row['name'] ?></td>
                                                 <td><?= $row['phone'] ?></td>
                                                 <td><?= $row['dl_no'] ?></td>
                                                 <td><?= $row['gst'] ?></td>
                                                 <td><?= $row['sd_amount'] ?></td>
-                                                <!-- <td>
-                                                    <a href="pharmacy_dashboard.php?delete=<?= $row['id'] ?>"
-                                                        class="btn btn-sm btn-danger"
-                                                        onclick="return confirm('Are you sure you want to delete this supplier?');">
-                                                        🗑️
-                                                    </a>
-                                                </td> -->
-
+                                                <td>
+                                                    <a href="supplier_edit.php?id=<?= $row['id'] ?>">Edit</a>
+                                                    <a href="supplier_delete.php?id=<?= $row['id'] ?>" onclick="return confirm('Delete?')">Delete</a>
+                                                </td>
 
 
                                             </tr>
@@ -520,8 +387,15 @@ require_once 'connect.php';
             </div>
         </div>
     </div>
+
+
+
+
+
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
 </body>
 
 </html>
