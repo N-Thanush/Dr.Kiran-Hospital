@@ -32,13 +32,12 @@ if (!preg_match("/^\d{4}-\d{2}-\d{2}$/", $date)) {
     exit;
 }
 
-// Check if the slot is available and not booked
+// Check if the slot is available
 try {
-    $checkQuery = "SELECT id, is_booked 
-                  FROM appointments 
+    $checkQuery = "SELECT id FROM appointments 
                   WHERE appointment_date = ? 
                   AND appointment_time = ?
-                  AND is_booked = FALSE";  // Only check if not booked
+                  AND status != 'cancelled'";
     
     $checkStmt = $conn->prepare($checkQuery);
     
@@ -54,9 +53,9 @@ try {
     
     $checkResult = $checkStmt->get_result();
     
-    if ($checkResult->num_rows === 0) {
+    if ($checkResult->num_rows > 0) {
         $response['available'] = false;
-        $response['message'] = 'Slot not available';
+        $response['message'] = 'Slot already booked';
     }
     
 } catch (Exception $e) {
@@ -67,4 +66,4 @@ try {
 }
 
 echo json_encode($response);
-?>
+?> 
